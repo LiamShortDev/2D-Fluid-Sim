@@ -44,17 +44,16 @@ namespace _2DFluidSim
             {
                 return new Vector(a.x*b, a.y * b);
             }
+            public double Magnitude ()
+            {
+                return Math.Sqrt(x * x + y * y);
+            }
         }
 
         static Vector[,] velocities = new Vector[400, 400];
-        static Color[,] dye = new Color[400, 400];
         public static Vector[,] GetVelocities()
         {
             return velocities;
-        }
-        public static Color[,] GetDye()
-        {
-            return dye;
         }
         public static void UpdateSimulation(double t)
         {
@@ -68,29 +67,6 @@ namespace _2DFluidSim
                 for(int j = 0; j < 400; j++)
                 {
                     velocities[i,j] = new Vector(0,0);
-                }
-            }
-        }
-        public static void InitialiseDye()
-        {
-            for (int i = 0; i < 400; i++)
-            {
-                for (int j = 0; j < 400; j++)
-                {
-                    dye[i, j] = Color.Blue;
-                }
-            }
-        }
-        public static void InjectDye(int x, int y)
-        {
-            for (int i = x - 8; i < x + 8; i++)
-            {
-                for (int j = y - 8; j < y + 8; j++)
-                {
-                    if (i > 0 && j > 0 && i < 400 && j < 400)
-                    {
-                        dye[i, j] = Color.Red;
-                    }
                 }
             }
         }
@@ -112,8 +88,8 @@ namespace _2DFluidSim
                 (currentPos.y - mousePos2.y) / deltaTime
             );
 
-            int radius = 5;
-            double strength = 0.5;
+            int radius = 1;
+            double strength = 0.2;
             for (int i = x - radius; i <= x + radius; i++)
             {
                 for (int j = y - radius; j <= y + radius; j++)
@@ -140,7 +116,6 @@ namespace _2DFluidSim
         static void Advection(double t)
         {
             Vector[,] newVelocities = new Vector[400, 400];
-            Color[,] newDye = new Color[400, 400];
 
             Parallel.For(0, 400, y =>
             {
@@ -148,11 +123,10 @@ namespace _2DFluidSim
                 {
                     Vector v = velocities[x, y];
                     Vector pos = new Vector(x, y) - new Vector(v.x * t, v.y * t);
-                    (newVelocities[x, y], newDye[x, y]) = SamplePropertiesAtPos(pos);
+                    newVelocities[x, y] = SamplePropertiesAtPos(pos);
                     if (double.IsNaN(newVelocities[x, y].x))
                     {
                         newVelocities[x, y] = new Vector(-velocities[x, y].x, -velocities[x, y].y);
-                        newDye[x, y] = dye[x, y];
                     }
                 }
             });
@@ -163,16 +137,15 @@ namespace _2DFluidSim
                 for (int x = 0; x < 400; x++)
                 {
                     velocities[x, y] = newVelocities[x, y];
-                    dye[x, y] = newDye[x, y];
                 }
             });
         }
-        static (Vector, Color) SamplePropertiesAtPos(Vector pos)
+        static Vector SamplePropertiesAtPos(Vector pos)
         {
+            double damping = 0.98;
             int x = Convert.ToInt32(Math.Floor(pos.x));
             int y = Convert.ToInt32(Math.Floor(pos.y));
             Vector vResult = new Vector(0, 0);
-            (int, int, int) cResult = (0, 0, 0);
             int samples = 0;
             for(int i = x-5; i < x+5; i++)
             {
@@ -181,7 +154,6 @@ namespace _2DFluidSim
                     if(i > 0 && j > 0 && i < 400 && j < 400)
                     {
                         vResult += velocities[i, j];
-                        cResult = (dye[i, j].R + cResult.Item1, dye[i,j].G + cResult.Item2, dye[i,j].B + cResult.Item3);
                         samples++;
                     }
                 }
@@ -189,12 +161,11 @@ namespace _2DFluidSim
             if (samples != 0)
             {
                 vResult = new Vector(vResult.x / samples, vResult.y / samples);
-                Color color = Color.FromArgb(0, cResult.Item1 / samples, cResult.Item2 / samples, cResult.Item3 / samples);
-                return (vResult, color);
+                return vResult*damping;
             }
             else
             {
-                return (new Vector(double.NaN, double.NaN), Color.FromArgb(0,0,0,0));
+                return new Vector(double.NaN, double.NaN);
             }
         }
     }

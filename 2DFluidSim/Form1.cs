@@ -27,17 +27,15 @@ namespace _2DFluidSim
         Bitmap bitmap;
         int width = 400;
         int height = 400;
+        int scale = 2;
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
         {
             if(e.KeyCode == Keys.D1)
             {
-                _dyeInjecting = false;
                 _waterInteracting = true;
             } 
             if(e.KeyCode == Keys.D2)
             {
-
-                _dyeInjecting = true;
                 _waterInteracting = false;
             }
         }
@@ -49,8 +47,8 @@ namespace _2DFluidSim
             InitializeSimulationDisplay();
             StartSimulationLoop();
         }
-        private bool _dyeInjecting = true;
-        private bool _waterInteracting = false;
+        //private bool _dyeInjecting = false;
+        private bool _waterInteracting = true;
         private bool _mousedown = false;
         private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
         {
@@ -63,7 +61,7 @@ namespace _2DFluidSim
         }
         public void InitializeSimulationDisplay()
         {
-            pictureBox1.Size = new Size(width, height);
+            pictureBox1.Size = new Size(width*scale, height*scale);
             pictureBox1.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureBox1.MouseDown += new MouseEventHandler(pictureBox1_MouseDown);
             pictureBox1.MouseUp += new MouseEventHandler(pictureBox1_MouseUp);
@@ -72,7 +70,6 @@ namespace _2DFluidSim
             bitmap = new Bitmap(width, height);
             pictureBox1.Image = bitmap;
             Program.InitialiseVelocities();
-            Program.InitialiseDye();
         }
 
         public void StartSimulationLoop()
@@ -88,10 +85,8 @@ namespace _2DFluidSim
             if (_mousedown)
             {
                 var pos = pictureBox1.PointToClient(Cursor.Position);
-                if (_dyeInjecting)
-                {
-                    Program.InjectDye(pos.X, pos.Y);
-                }
+                pos.X /= scale;
+                pos.Y /= scale;
                 if (_waterInteracting)
                 {
                     Program.ApplyMouseAcceleration(pos.X, pos.Y);
@@ -105,7 +100,6 @@ namespace _2DFluidSim
                 PixelFormat.Format32bppArgb
             );
             Program.Vector[,] velocities = Program.GetVelocities();
-            Color[,] dye = Program.GetDye();
 
             unsafe
             {
@@ -125,12 +119,24 @@ namespace _2DFluidSim
                         double normalized = Math.Min(1.0, magnitude / maxVelocity);
                         byte red = (byte)(normalized * 255);
                         */
-                        Color c = dye[x, y];
+
+                        Program.Vector v = velocities[x, y];
+                        double angle = Math.Atan2(v.y, v.x);  
+                        double speed = v.Magnitude();            
+
+                        // Map angle to hue (0–360), speed to brightness (0–1)
+                        double hue = (angle * (180 / Math.PI) + 360) % 360;
+                        double saturation = 1.0;
+                        double value = Math.Min(speed * 5.0, 1.0);  // adjust multiplier for brightness
+                        int r = 0;
+                        int g = 0;
+                        int b = 0;
+                        (r, g, b) = HSVtoRGB(hue, saturation, value);
 
                         int index = x * 4;
-                        row[index + 0] = c.B;       // Blue
-                        row[index + 1] = c.G;       // Green
-                        row[index + 2] = c.R;     // Red
+                        row[index + 0] = (byte)r;       // Blue
+                        row[index + 1] = (byte)g;       // Green
+                        row[index + 2] = (byte)b;       // Red
                         row[index + 3] = 255;     // Alpha
                     }
                 }
@@ -139,6 +145,38 @@ namespace _2DFluidSim
             bitmap.UnlockBits(data);
             pictureBox1.Image = bitmap;
             Program.UpdateSimulation(32.0f/1000);
+        }
+
+        public (int, int, int) HSVtoRGB(double hue, double saturation, double value)
+        {
+            double chroma = value * saturation;
+            double hPrime = hue / 60;
+            double X = chroma * (1 - Math.Abs((hPrime % 2) - 1));
+            double r;
+            double g;
+            double b;
+            switch(Math.Floor(hPrime) % 6)
+            {
+                case 0: r = chroma; g = X; b = 0; break;
+                case 1: r = X; g = chroma; b = 0; break;
+                case 2: r = 0; g = chroma; b = X; break;
+                case 3: r = 0; g = X; b = chroma; break;
+                case 4: r = X; g = 0; b = chroma; break;
+                case 5: r = chroma; g = 0; b = X; break;
+                default: r = 0; g = 0; b = 0; break;
+            }
+            double m = value - chroma;
+            r += m; g += m; b += m;
+            return (
+                (int)(Math.Max(0, Math.Min(1, r)) * 255),
+                (int)(Math.Max(0, Math.Min(1, g)) * 255),
+                (int)(Math.Max(0, Math.Min(1, b)) * 255)
+            );
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+
         }
     }
 }
